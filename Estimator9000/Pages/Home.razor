@@ -8,45 +8,36 @@
 <div class="input-group">
 
     <div>
-        <label for="startDate">Start date: </label>
-        <input id="startDate" class="form-control mb-10" style="width: 100%" @bind="startDate" />
+        <label for="startDate" style="display:inline-block">Start date: </label>
+        <input id="startDate" class="form-control mb-10" style="width: 60%; display:inline-block;" @bind="startDate" />
     </div>
     <p></p>
     <div class="input-group-append" style="width: 90%; padding-top: 5px">
-        <label for="newItem">New variable (format: name-mean-stdDev): </label>
-        <input id="newItem" class="form-control mb-2" style="width: 30%" @bind="newItem" />
+        <label for="newItem">New variable (format: name-mean-variance-(mm/dd/yy)*): </label>
+        <input placeholder="no spaces, strict format" id="newItem" class="form-control mb-2" style="width: 30%; display:inline-block" @bind="newItem" />
+        <button class="btn btn-outline-primary" type="button" style="display:inline-block" @onclick="AddVariable">Add</button>
     </div>
-
-    <div class="input-group-append" style="padding-left: 10px;">
-        <button class="btn btn-outline-primary" type="button" @onclick="AddVariable">AddVariable</button>
-    </div>
-
 </div>
+
+<p>All Variables</p>
 
 @foreach (var variable in this.variables)
 {
-    <div class="mb-2" style="text-decoration: underline">
-        @variable.Key: @variable.Value.Mean, @variable.Value.variance
-    </div>
-    <p>depends on:</p>
-    
-    <InputSelect @bind-Value:get="@variable.Value.DependsOn.Name" @bind-Value:set="(val) => SetSelected(variable.Key, val)" class="form-control" style="width: 200px">
-        <option value="null">Select an option</option>
-        
-        @foreach (var value in this.variables)
-        {
-            <option value="@value.Key">@value.Key</option>
-        }
-    </InputSelect>
+    <div>
+        <div class="mb-2" style="font-weight: bold; display:inline-block">
+            @variable.Key-@variable.Value.Mean-@variable.Value.variance-(@variable.Value.startDate.ToString("MM/dd/yy"))
+        </div>
+        <p style="display:inline-block; padding:10px"> => </p>
 
-@* 
-    <select class="custom-select" id="inputGroupSelect04" @bind="@variable.Value.DependsOn">
-        <option value="">None</option>
-        @foreach (var variable2 in this.variables)
-        {
-            <option value="@variable2.Value.Name">@variable2.Key</option>
-        }
-    </select> *@
+        <InputSelect @bind-Value:get="@variable.Value.DependsOn.Name" @bind-Value:set="(val) => SetSelected(variable.Key, val)" class="form-control" style="width: 200px; display:inline-block">
+            <option value="null">Select an option</option>
+
+            @foreach (var value in this.variables)
+            {
+                <option value="@value.Key">@value.Key</option>
+            }
+        </InputSelect>
+    </div>
 }
 
 
@@ -151,6 +142,7 @@
         public string? Name { get; set; }    
         public double Mean { get; set; }
         public double variance { get; set; }
+        public DateTime startDate { get; set; }
 
         public Variable DependsOn { get; set; }
 
@@ -164,12 +156,16 @@
                 variance = 0.5;    
             }
 
+            var startDate = DateTime.Today;
+            if (components.Length == 4 && DateTime.TryParse(components[3].Trim(['(', ')']), out startDate)) { }
+
             return new Variable
                 {
                     Name = components[0],
                     Mean = double.Parse(components[1]),
                     variance = variance,
-                    DependsOn = startDateVariable
+                    DependsOn = startDateVariable,
+                    startDate = startDate
                 };
         }
     }
@@ -202,13 +198,15 @@
             var rec = variable.Value;
             var sumMean = rec.Mean;
             var sumVariance = rec.variance;
-            var i = 0;
-
+            var offset = (int)rec.startDate.Subtract(this.startDate).TotalDays;
             var correlation = 1;
 
-            while (rec.DependsOn != null && i < 5)
+            var i = 0;
+            while (rec.DependsOn != null && rec.DependsOn.Name != "Start" && i < 5)
             {
+                rec = rec.DependsOn;
                 i++;
+                offset += (int)rec.startDate.Subtract(this.startDate).TotalDays;
                 rec = rec.DependsOn;
                 sumMean += rec.Mean;
                 sumVariance += (rec.variance + 2 * correlation * Math.Sqrt(sumVariance) * Math.Sqrt(rec.variance));
@@ -217,9 +215,9 @@
             var dataset = new LineChartDataset
             {
                 Label = variable.Key,
-                Data = GetGaussianCDF(sumMean, sumVariance, maxDays),
-                    BackgroundColor = colors[color],
-                    BorderColor = colors[color],
+                Data = GetGaussianCDF(sumMean, sumVariance, maxDays, offset),
+                BackgroundColor = colors[color],
+                BorderColor = colors[color],
                 BorderWidth = 2,
                 HoverBorderWidth = 4,
                 // PointBackgroundColor = colors[0],
@@ -257,11 +255,17 @@
     private ChartData chartData = default!;
 
 
-    private static List<double?> GetGaussianCDF(double mean, double variance, int count)
+    private static List<double?> GetGaussianCDF(double mean, double variance, int count, int offSetDays = 0)
     {
         var res = new List<double?>();
         var sum = 0.0;
-        for (int i = 0; i < count; i++)
+
+        for (int i = 0; i < offSetDays; i++)
+        {
+            res.Add(0);
+        }
+
+        for (int i = 0; i < count - offSetDays; i++)
         {
             var g = SampleGaussian(i, mean, variance);
 
