@@ -1,0 +1,312 @@
+﻿@page "/"
+@using System.ComponentModel
+@using Newtonsoft.Json;
+@inject NavigationManager NavManager
+
+
+<PageTitle>Home</PageTitle>
+<div class="input-group">
+
+    <div>
+        <label for="startDate">Start date: </label>
+        <input id="startDate" class="form-control mb-10" style="width: 100%" @bind="startDate" />
+    </div>
+    <p></p>
+    <div class="input-group-append" style="width: 90%; padding-top: 5px">
+        <label for="newItem">New variable (format: name-mean-stdDev): </label>
+        <input id="newItem" class="form-control mb-2" style="width: 30%" @bind="newItem" />
+    </div>
+
+    <div class="input-group-append" style="padding-left: 10px;">
+        <button class="btn btn-outline-primary" type="button" @onclick="AddVariable">AddVariable</button>
+    </div>
+
+</div>
+
+@foreach (var variable in this.variables)
+{
+    <div class="mb-2" style="text-decoration: underline">
+        @variable.Key: @variable.Value.Mean, @variable.Value.variance
+    </div>
+    <p>depends on:</p>
+    
+    <InputSelect @bind-Value:get="@variable.Value.DependsOn.Name" @bind-Value:set="(val) => SetSelected(variable.Key, val)" class="form-control" style="width: 200px">
+        <option value="null">Select an option</option>
+        
+        @foreach (var value in this.variables)
+        {
+            <option value="@value.Key">@value.Key</option>
+        }
+    </InputSelect>
+
+@* 
+    <select class="custom-select" id="inputGroupSelect04" @bind="@variable.Value.DependsOn">
+        <option value="">None</option>
+        @foreach (var variable2 in this.variables)
+        {
+            <option value="@variable2.Value.Name">@variable2.Key</option>
+        }
+    </select> *@
+}
+
+
+<div class="container-fluid overflow-x-auto">
+    <LineChart @ref="lineChart" Width="1200" />
+</div>
+
+
+<p></p>
+<div style="width: 100%; box-sizing: border-box; display: inline-grid;">
+    <button style="left: 0px; float: left; width: 140px;" class="btn btn-outline-secondary" type="button" @onclick="GetUrl">GetUrl</button>
+    <a style="float: left; max-width: 300px;" href="@pageUrl">@pageUrl.Substring(0, pageUrl.Length > 100 ? 100 : pageUrl.Length)</a>
+</div>
+
+@code {
+    private string pageUrl { get; set; } = "";
+
+    private Dictionary<string, Variable> variables = new Dictionary<string, Variable>();
+
+    private string newItem { get; set; } = "";
+    private string selectedDependency { get; set; } = "";
+
+    private DateTime startDate { get; set; } = DateTime.Today.ToLocalTime();
+    private static Variable startDateVariable { get; set; } = new Variable() { Name = "Start", Mean = 0, variance = 0 };
+
+    protected override void OnInitialized()
+    {
+        NavManager.LocationChanged += LocationChanged;
+    }
+
+    async void LocationChanged(object sender, LocationChangedEventArgs e)
+    {
+        await Reload();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await Reload(); 
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    protected async Task Reload()
+    {
+        var uriBuilder = new UriBuilder(NavManager.Uri);
+        var parsedQuery = System.Web.HttpUtility.ParseQueryString(uriBuilder.Query);
+
+        if (parsedQuery["variables"] != null && this.variables.Count == 0)
+        {
+            var variablesbase64 = Convert.FromBase64String(parsedQuery["variables"]);
+            var variablesJson = System.Text.Encoding.UTF8.GetString(variablesbase64);
+            this.variables = JsonConvert.DeserializeObject<Dictionary<string, Variable>>(variablesJson) ?? new Dictionary<string, Variable>();
+
+            if (parsedQuery["startDate"] != null)
+            {
+                this.startDate = DateTime.Parse(parsedQuery["startDate"]!);
+            }
+
+            StateHasChanged();
+            await DrawChart();
+        }
+
+
+        // StateHasChanged();
+    }
+
+    protected async Task AddVariable()
+    {
+        if (string.IsNullOrEmpty(this.newItem))
+            return;
+
+        var newVariable = Variable.Parse(this.newItem);
+        this.variables[newVariable.Name] = newVariable;
+
+        this.newItem = "";
+
+        await DrawChart();
+    }
+
+    private string selected = null!;
+
+    async Task SetSelected(string variable, string? value)
+    {
+        var variableRef = this.variables[variable];
+        if (value == null || value == "null")
+        {
+            variableRef.DependsOn = startDateVariable;
+            await DrawChart();
+            return;
+        }
+
+        var dependency = this.variables[value!];
+        if (dependency != null)
+        {
+            variableRef.DependsOn = dependency;
+        }
+
+        await DrawChart();
+    }
+
+    public class Variable
+    {
+        public string? Name { get; set; }    
+        public double Mean { get; set; }
+        public double variance { get; set; }
+
+        public Variable DependsOn { get; set; }
+
+        public static Variable Parse(string value)
+        {
+            var components = value.Split('-').Select(c => c.Trim()).ToArray();
+            var variance = double.Parse(components[2]);
+
+            if (variance == 0)
+            {
+                variance = 0.5;    
+            }
+
+            return new Variable
+                {
+                    Name = components[0],
+                    Mean = double.Parse(components[1]),
+                    variance = variance,
+                    DependsOn = startDateVariable
+                };
+        }
+    }
+
+    protected async Task DrawChart()
+    {
+        var colors = ColorUtility.CategoricalTwelveColors;
+
+        var maxDays = 150;
+        var labels = new List<string>();
+        var current = this.startDate;
+        for (int i = 0; i < maxDays; i++)
+        {
+            current = current.AddDays(1);
+            labels.Add(current.ToShortDateString());
+        }
+
+        var datasets = new List<IChartDataset>();
+
+        var color = -1;
+        foreach (var variable in this.variables)
+        {
+            if (variable.Value.variance == 0)
+            {
+                continue;
+            }
+
+            color = (color +1) % 12;
+
+            var rec = variable.Value;
+            var sumMean = rec.Mean;
+            var sumVariance = rec.variance;
+            var i = 0;
+
+            var correlation = 1;
+
+            while (rec.DependsOn != null && i < 5)
+            {
+                i++;
+                rec = rec.DependsOn;
+                sumMean += rec.Mean;
+                sumVariance += (rec.variance + 2 * correlation * Math.Sqrt(sumVariance) * Math.Sqrt(rec.variance));
+            }
+
+            var dataset = new LineChartDataset
+            {
+                Label = variable.Key,
+                Data = GetGaussianCDF(sumMean, sumVariance, maxDays),
+                    BackgroundColor = colors[color],
+                    BorderColor = colors[color],
+                BorderWidth = 2,
+                HoverBorderWidth = 4,
+                // PointBackgroundColor = colors[0],
+                // PointRadius = 0, // hide points
+                // PointHoverRadius = 4,
+            };
+            datasets.Add(dataset);
+        }
+
+        chartData = new ChartData { Labels = labels, Datasets = datasets };
+
+        lineChartOptions = new();
+        lineChartOptions.Responsive = true;
+        lineChartOptions.Interaction = new Interaction { Mode = InteractionMode.Index };
+
+        lineChartOptions.Scales.X!.Title = new ChartAxesTitle { Text = "Time", Display = true };
+        lineChartOptions.Scales.Y!.Title = new ChartAxesTitle { Text = "Probability", Display = true };
+
+        // lineChartOptions.Plugins.Title!.Text = "Operating system";
+        // lineChartOptions.Plugins.Title.Display = true;
+
+        if (!lineChartInitialized)
+        {
+            await lineChart.InitializeAsync(chartData, lineChartOptions);
+            lineChartInitialized = true;
+        }
+
+        await lineChart.UpdateValuesAsync(chartData);
+
+    }
+
+    private LineChart lineChart = default!;
+    private bool lineChartInitialized = false;
+    private LineChartOptions lineChartOptions = default!;
+    private ChartData chartData = default!;
+
+
+    private static List<double?> GetGaussianCDF(double mean, double variance, int count)
+    {
+        var res = new List<double?>();
+        var sum = 0.0;
+        for (int i = 0; i < count; i++)
+        {
+            var g = SampleGaussian(i, mean, variance);
+
+            if (g != null)
+            {
+                sum = sum + (double)g;
+                res.Add(sum);
+            }else
+            {
+                res.Add(0);
+            }
+        }
+
+        return res;
+    }
+
+    private static double? SampleGaussian(int x, double mean, double variance)
+    {
+        var sigma = Math.Sqrt(variance);
+        var sqrttwopi = Math.Sqrt(2 * Math.PI * variance);
+
+        var p = (1 / (sqrttwopi)) * Math.Exp(-1 * (Math.Pow((x - mean), 2) / (2 * variance)));
+
+        if (p < 0)
+        {
+            return null;
+        }
+
+        return p;
+    }
+
+    protected async Task GetUrl()
+    {
+        var variablesText = JsonConvert.SerializeObject(this.variables);
+        var encodedVariables = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(variablesText));
+
+        var uriBuilder = new UriBuilder(NavManager.Uri);
+        var parsedQuery = System.Web.HttpUtility.ParseQueryString(uriBuilder.Query);
+        parsedQuery["variables"] = encodedVariables;
+        parsedQuery["startDate"] = this.startDate.ToString();
+        // parsedQuery["type"] = type;
+        // parsedQuery["input"] = input;
+
+        uriBuilder.Query = parsedQuery.ToString();
+
+        pageUrl = uriBuilder.ToString();
+    }
+}
