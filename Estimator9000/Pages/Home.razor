@@ -199,23 +199,27 @@
             var sumMean = rec.Mean;
             var sumVariance = rec.variance;
             var offset = (int)rec.startDate.Subtract(this.startDate).TotalDays;
+            var cdf = GetGaussianCDF(sumMean, sumVariance, maxDays, offset);
             var correlation = 1;
 
             var i = 0;
             while (rec.DependsOn != null && rec.DependsOn.Name != "Start" && i < 5)
             {
-                rec = rec.DependsOn;
                 i++;
-                offset += (int)rec.startDate.Subtract(this.startDate).TotalDays;
                 rec = rec.DependsOn;
-                sumMean += rec.Mean;
-                sumVariance += (rec.variance + 2 * correlation * Math.Sqrt(sumVariance) * Math.Sqrt(rec.variance));
+                offset = (int)rec.startDate.Subtract(this.startDate).TotalDays;
+                var localCdf = GetGaussianCDF(rec.Mean, rec.variance, maxDays, offset);
+
+                cdf = MultplyAndAssign(cdf, localCdf);
+
+                // sumMean += rec.Mean;
+                // sumVariance += (rec.variance + 2 * correlation * Math.Sqrt(sumVariance) * Math.Sqrt(rec.variance));
             }
 
             var dataset = new LineChartDataset
             {
                 Label = variable.Key,
-                Data = GetGaussianCDF(sumMean, sumVariance, maxDays, offset),
+                Data = cdf, //GetGaussianCDF(sumMean, sumVariance, maxDays, offset),
                 BackgroundColor = colors[color],
                 BorderColor = colors[color],
                 BorderWidth = 2,
@@ -277,6 +281,17 @@
             {
                 res.Add(0);
             }
+        }
+
+        return res;
+    }
+
+    public static List<double?> MultplyAndAssign(List<double?> a, List<double?> b)
+    {
+        var res = new List<double?>(capacity: a.Count);
+        for (int i = 0; i < a.Count; i++)
+        {
+            res.Add(a[i] * b[i]);
         }
 
         return res;
