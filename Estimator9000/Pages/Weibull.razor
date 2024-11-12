@@ -1,4 +1,4 @@
-﻿@page "/"
+﻿@page "/Weibull"
 @using System.ComponentModel
 @using Newtonsoft.Json;
 @using Estimator9000;
@@ -14,7 +14,7 @@
     </div>
     <p></p>
     <div class="input-group-append" style="width: 90%; padding-top: 5px">
-        <label for="newItem">New variable (format: name-mean-variance-shift-(mm/dd/yy)*): </label>
+        <label for="newItem">New variable (format: name-K[1-3]-Length-shift-(mm/dd/yy)*): </label>
         <input placeholder="no spaces, strict format" id="newItem" class="form-control mb-2" style="width: 30%; display:inline-block" @bind="newItem" />
         <button class="btn btn-outline-primary" type="button" style="display:inline-block" @onclick="AddVariable">Add</button>
     </div>
@@ -109,7 +109,7 @@
         if (string.IsNullOrEmpty(this.newItem))
             return;
 
-        var newVariable = Variable.Parse(this.newItem, Home.startDateVariable);
+        var newVariable = Variable.Parse(this.newItem, Weibull.startDateVariable);
         this.variables[newVariable.Name] = newVariable;
 
         this.newItem = "";
@@ -167,7 +167,7 @@
             var sumMean = rec.Mean;
             var sumVariance = rec.variance;
             var offset = (int)rec.startDate.Subtract(this.startDate).TotalDays;
-            var cdf = GaussianDistribution.GetCDF(sumMean, sumVariance, maxDays, offset);
+            var cdf = WeibullDistribution.GetCDF(sumMean, sumVariance, maxDays, offset);
             var correlation = 1;
 
             var i = 0;
@@ -176,20 +176,20 @@
                 i++;
                 rec = rec.DependsOn;
                 offset = (int)rec.startDate.Subtract(this.startDate).TotalDays;
-                var localCdf = GaussianDistribution.GetCDF(rec.Mean, rec.variance, maxDays, offset);
+                var localCdf = WeibullDistribution.GetCDF(rec.Mean, rec.variance, maxDays, offset).Shift((int)rec.shift);
 
-                cdf = cdf.MultiplyAndAssign(localCdf).Shift((int)rec.shift);
+                cdf = cdf.MultiplyAndAssign(localCdf);
 
                 // sumMean += rec.Mean;
                 // sumVariance += (rec.variance + 2 * correlation * Math.Sqrt(sumVariance) * Math.Sqrt(rec.variance));
             }
-            
+
             cdf = cdf.Shift((int)variable.Value.shift);
 
             var dataset = new LineChartDataset
             {
                 Label = variable.Key,
-                Data = cdf,
+                Data = cdf, //GaussianDistribution.GetGaussianCDF(sumMean, sumVariance, maxDays, offset),
                 BackgroundColor = colors[color],
                 BorderColor = colors[color],
                 BorderWidth = 2,
