@@ -1,7 +1,7 @@
 {
   "mainAssemblyName": "Estimator9000",
   "resources": {
-    "hash": "sha256-yHQiitKCT9yg7jSwrVXq5STru9Flm0t6hC4kJ0Tg+q8=",
+    "hash": "sha256-XN8gOnL8DqOF7imy/tCUEFo/46TOTNQLCR4GtAkqtCc=",
     "jsModuleNative": {
       "dotnet.native.8.0.11.00e49mb76b.js": "sha256-VdKq87/z5NIxZKmuM+fv38XF+RcEb/bg3jVBwQSfwP4="
     },
@@ -18,7 +18,7 @@
     },
     "assembly": {
       "BlazorBootstrap.wasm": "sha256-KvMCw6Z4ECWlPEz4jeQ0QWRGeVqaYlz5Xty6Qz3MwDc=",
-      "Estimator9000.wasm": "sha256-X6GX/qxEItRC6c7fIIlcwwOspaxAiiHmP5aW1CMzpvg=",
+      "Estimator9000.wasm": "sha256-FrkV+8PDGwGUZMSfrR286f04ujyskqI3/qjduCk7f+U=",
       "Microsoft.AspNetCore.Components.Forms.wasm": "sha256-AB7P72nA6ejuXLycHnmXmIfIqHR2kghw0gVj0mWflDc=",
       "Microsoft.AspNetCore.Components.wasm": "sha256-F3PWUTk+MEDH3T+vFPSDttUU2Kva6g6DcmCd/NqyA/8=",
       "Microsoft.AspNetCore.Components.Web.wasm": "sha256-HHJGQmX88JDyJM7d2ahqtjgPhOIvs/iLJu2liPOxoPw=",

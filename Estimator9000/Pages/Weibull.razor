@@ -12,7 +12,7 @@
     K: is an indicator of how sharp the curve climbs for Length. Usually a value like 1 will make sense. But some tasks will have a sharper cdf curve to finish.
     Length: Expected duration of the task. 
     Shift: Number of days this task needs as a buffer to start from a predecessor. 
-    (mm/dd/yy)*): Optional, start after day. Indicates the task starts at this time. If null it's set to now.
+    (mm/dd/yy)*: Optional, start after day. Indicates the task starts at this time. If null it's set to now.
 </div>
 
 <div class="input-group">
@@ -187,7 +187,7 @@
                 offset = (int)rec.startDate.Subtract(this.startDate).TotalDays;
                 var localCdf = WeibullDistribution.GetCDF(rec.Mean, rec.variance, maxDays, offset).Shift((int)rec.shift);
 
-                cdf = cdf.MultiplyAndAssign(localCdf);
+                cdf = CDFExtensions.MonteCarloCombine(localCdf, cdf);
 
                 // sumMean += rec.Mean;
                 // sumVariance += (rec.variance + 2 * correlation * Math.Sqrt(sumVariance) * Math.Sqrt(rec.variance));
