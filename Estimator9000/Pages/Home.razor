@@ -26,6 +26,10 @@
         <input placeholder="no spaces, strict format" id="newItem" class="form-control mb-2" style="width: 30%; display:inline-block" @bind="newItem" />
         <button class="btn btn-outline-primary" type="button" style="display:inline-block" @onclick="AddVariable">Add</button>
     </div>
+    <div style="padding-top: 5px">
+        <input type="checkbox" id="longProject" @bind="isLongProject" @bind:after="DrawChart" />
+        <label for="longProject">Long project (3-year timeline)</label>
+    </div>
 </div>
 
 <p>All Variables</p>
@@ -51,7 +55,7 @@
 
 
 <div class="container-fluid overflow-x-auto">
-    <LineChart @ref="lineChart" Width="1200" />
+    <LineChart @ref="lineChart" Width="@(isLongProject ? 2400 : 1200)" />
 </div>
 
 
@@ -104,6 +108,11 @@
                 this.startDate = DateTime.Parse(parsedQuery["startDate"]!);
             }
 
+            if (parsedQuery["longProject"] != null)
+            {
+                this.isLongProject = parsedQuery["longProject"] == "true";
+            }
+
             StateHasChanged();
             await DrawChart();
         }
@@ -146,17 +155,27 @@
         await DrawChart();
     }
 
+    private bool isLongProject { get; set; } = false;
+
     protected async Task DrawChart()
     {
         var colors = ColorUtility.CategoricalTwelveColors;
 
-        var maxDays = 150;
+        var maxDays = isLongProject ? 1095 : 150;
+        var labelInterval = isLongProject ? 30 : 1;
         var labels = new List<string>();
         var current = this.startDate;
         for (int i = 0; i < maxDays; i++)
         {
             current = current.AddDays(1);
-            labels.Add(current.ToShortDateString());
+            if (i % labelInterval == 0)
+            {
+                labels.Add(current.ToShortDateString());
+            }
+            else
+            {
+                labels.Add("");
+            }
         }
 
         var datasets = new List<IChartDataset>();
@@ -245,6 +264,8 @@
         var parsedQuery = System.Web.HttpUtility.ParseQueryString(uriBuilder.Query);
         parsedQuery["variables"] = encodedVariables;
         parsedQuery["startDate"] = this.startDate.ToString();
+        if (this.isLongProject)
+            parsedQuery["longProject"] = "true";
         // parsedQuery["type"] = type;
         // parsedQuery["input"] = input;
 
